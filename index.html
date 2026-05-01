@@ -8,48 +8,37 @@
         body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
         .card { background: white; width: 95%; max-width: 500px; padding: 30px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); text-align: center; box-sizing: border-box; }
         .q-btn { background: #3498db; color: white; border: none; width: 80px; height: 80px; border-radius: 50%; font-size: 40px; cursor: pointer; transition: 0.2s; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3); }
-        .q-btn:active { transform: scale(0.9); }
         .mic-btn { background: #e74c3c; color: white; border: none; width: 70px; height: 70px; border-radius: 50%; font-size: 28px; cursor: pointer; display: none; margin: 20px auto; outline: none; transition: 0.3s; }
         .mic-btn.active { animation: pulse 1.5s infinite; background: #c0392b; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); } 70% { box-shadow: 0 0 0 20px rgba(231, 76, 60, 0); } 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); } }
-        
-        .keyword-window { background: #fff9c4; border: 2px dashed #fbc02d; padding: 15px; border-radius: 10px; margin: 20px 0; display: none; }
+        .keyword-window { background: #fff9c4; border: 2px dashed #fbc02d; padding: 15px; border-radius: 10px; margin: 20px 0; }
         .keyword { font-weight: bold; color: #f57f17; font-size: 1.3rem; }
-        
-        /* New Transcript Style */
-        .transcript-box { background: #eef2f7; border-left: 5px solid #3498db; padding: 12px; margin-top: 15px; text-align: left; display: none; font-style: italic; color: #34495e; }
-        
-        .feedback { font-weight: bold; margin-top: 15px; font-size: 1.2rem; min-height: 1.5em; }
+        #transcriptBox { background: #f0f7ff; border: 1px solid #d0e3ff; padding: 15px; margin: 20px 0; border-radius: 10px; text-align: left; display: none; }
+        .label { font-size: 0.7rem; color: #5dade2; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
+        .feedback { font-weight: bold; margin-top: 15px; font-size: 1.4rem; min-height: 1.5em; }
         .correct { color: #27ae60; }
         .incorrect { color: #c0392b; }
-        
-        .expected-box { background: #f8f9fa; border: 1px solid #ddd; padding: 15px; margin-top: 10px; border-radius: 8px; text-align: left; font-size: 1rem; display: none; line-height: 1.4; }
-        #counter { color: #95a5a6; font-size: 0.9rem; margin-top: 15px; }
+        .expected-box { background: #fdfefe; border: 1px solid #ebedef; padding: 15px; margin-top: 10px; border-radius: 8px; text-align: left; font-size: 1rem; display: none; border-left: 4px solid #bdc3c7; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <button class="q-btn" id="qBtn" onclick="askQuestion()">❓</button>
-    <div id="keywordWindow" class="keyword-window">
-        <div style="font-size: 0.8rem; color: #7f8c8d; margin-bottom: 5px; letter-spacing: 1px;">KEYWORDS</div>
+    <button class="q-btn" onclick="askQuestion()">❓</button>
+    <div id="keywordWindow" class="keyword-window" style="display:none;">
+        <div style="font-size: 0.8rem; color: #7f8c8d; margin-bottom: 5px;">KEYWORDS</div>
         <div id="keywordList" class="keyword"></div>
     </div>
-    
     <button class="mic-btn" id="micBtn" onclick="startListening()">🎤</button>
-    
-    <!-- New Section: User Transcript -->
-    <div id="transcriptBox" class="transcript-box">
-        <strong>You said:</strong> <span id="transcriptText"></span>
+    <div id="transcriptBox">
+        <div class="label">You said:</div>
+        <div id="transcriptText" style="color: #2e4053; font-style: italic;"></div>
     </div>
-
     <div id="feedback" class="feedback"></div>
-    
     <div id="expectedBox" class="expected-box">
-        <strong style="color: #2c3e50;">Expected Answer:</strong><br>
+        <div class="label" style="color: #7f8c8d;">Expected Answer:</div>
         <span id="expectedText"></span>
     </div>
-    <div id="counter">Questions left: 20</div>
 </div>
 
 <script>
@@ -81,91 +70,59 @@
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = SpeechRecognition ? new SpeechRecognition() : null;
-    const synth = window.speechSynthesis;
-    let preferredVoice = null;
 
-    function loadVoices() {
-        const voices = synth.getVoices();
-        preferredVoice = voices.find(v => v.name.includes('Google US English')) ||
-                         voices.find(v => v.name.includes('Natural') && v.lang.includes('en')) ||
-                         voices.find(v => v.lang.includes('en-US')) ||
-                         voices.find(v => v.lang.includes('en'));
-    }
-    if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = loadVoices;
-    loadVoices();
-
-    if (recognition) {
-        recognition.lang = 'en-US';
-        recognition.interimResults = false;
-        recognition.continuous = false;
+    // Helper function to compare strings (Levenshtein Distance concept)
+    function checkSimilarity(s1, s2) {
+        const words1 = s1.toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"").split(" ");
+        const words2 = s2.toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"").split(" ");
+        let matches = 0;
+        words2.forEach(word => { if(words1.includes(word)) matches++; });
+        return matches / words2.length; // Returns 0.0 to 1.0
     }
 
     function askQuestion() {
         document.getElementById('feedback').innerText = "";
         document.getElementById('expectedBox').style.display = "none";
-        document.getElementById('transcriptBox').style.display = "none"; // Hide transcript
-        
-        if (availableQuestions.length === 0) {
-            alert("All questions finished! Restarting...");
-            availableQuestions = [...qaData];
-        }
+        document.getElementById('transcriptBox').style.display = "none";
+        document.getElementById('keywordWindow').style.display = "block";
 
+        if (availableQuestions.length === 0) { availableQuestions = [...qaData]; }
         const index = Math.floor(Math.random() * availableQuestions.length);
         currentQA = availableQuestions.splice(index, 1)[0];
 
-        document.getElementById('keywordWindow').style.display = "block";
         document.getElementById('keywordList').innerText = currentQA.k;
         document.getElementById('micBtn').style.display = "block";
-        document.getElementById('counter').innerText = `Questions left: ${availableQuestions.length}`;
 
-        synth.cancel();
+        window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(currentQA.q);
-        if (preferredVoice) utter.voice = preferredVoice;
         utter.rate = 0.9;
-        synth.speak(utter);
+        window.speechSynthesis.speak(utter);
     }
 
     function startListening() {
-        if (!recognition) return alert("Browser not supported.");
-        try {
-            recognition.start();
-            document.getElementById('micBtn').classList.add('active');
-            document.getElementById('feedback').innerText = "Listening...";
-        } catch (e) { console.log("Mic busy"); }
+        recognition.start();
+        document.getElementById('micBtn').classList.add('active');
     }
 
     if (recognition) {
         recognition.onresult = (event) => {
             document.getElementById('micBtn').classList.remove('active');
             const transcript = event.results[0][0].transcript;
-            
-            // Show the transcript box
             document.getElementById('transcriptBox').style.display = "block";
-            document.getElementById('transcriptText').innerText = transcript;
+            document.getElementById('transcriptText').innerText = '"' + transcript + '"';
 
-            const cleanTranscript = transcript.toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"").trim();
-            const target = currentQA.a.toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"").trim();
-            
-            const feedback = document.getElementById('feedback');
+            // STRICT MATCHING: Does the user's speech contain most of the target answer?
+            const score = checkSimilarity(transcript, currentQA.a);
 
-            if (cleanTranscript === target || target.includes(cleanTranscript) && cleanTranscript.length > 5) {
-                feedback.innerHTML = '<span class="correct">Very good!</span>';
+            if (score > 0.80) { // 80% of words must match the provided answer exactly
+                document.getElementById('feedback').innerHTML = '<span class="correct">Very good!</span>';
             } else {
-                feedback.innerHTML = '<span class="incorrect">It is different.</span>';
+                document.getElementById('feedback').innerHTML = '<span class="incorrect">It is different.</span>';
                 document.getElementById('expectedBox').style.display = "block";
                 document.getElementById('expectedText').innerText = currentQA.a;
-                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
             }
         };
-
-        recognition.onerror = () => {
-            document.getElementById('micBtn').classList.remove('active');
-            document.getElementById('feedback').innerText = "Try speaking again...";
-        };
-
-        recognition.onend = () => document.getElementById('micBtn').classList.remove('active');
     }
 </script>
-
 </body>
 </html>
