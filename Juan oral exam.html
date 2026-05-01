@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>English Practice Agent</title>
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .card { background: white; width: 95%; max-width: 500px; padding: 30px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); text-align: center; box-sizing: border-box; }
+        .q-btn { background: #3498db; color: white; border: none; width: 80px; height: 80px; border-radius: 50%; font-size: 40px; cursor: pointer; transition: 0.2s; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3); }
+        .q-btn:active { transform: scale(0.9); }
+        .mic-btn { background: #e74c3c; color: white; border: none; width: 70px; height: 70px; border-radius: 50%; font-size: 28px; cursor: pointer; display: none; margin: 20px auto; outline: none; transition: 0.3s; }
+        .mic-btn.active { animation: pulse 1.5s infinite; background: #c0392b; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); } 70% { box-shadow: 0 0 0 20px rgba(231, 76, 60, 0); } 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); } }
+        .keyword-window { background: #fff9c4; border: 2px dashed #fbc02d; padding: 15px; border-radius: 10px; margin: 20px 0; display: none; }
+        .keyword { font-weight: bold; color: #f57f17; font-size: 1.3rem; }
+        .feedback { font-weight: bold; margin-top: 15px; font-size: 1.2rem; min-height: 1.5em; }
+        .correct { color: #27ae60; }
+        .incorrect { color: #c0392b; }
+        .expected-box { background: #f8f9fa; border: 1px solid #ddd; padding: 15px; margin-top: 15px; border-radius: 8px; text-align: left; font-size: 1rem; display: none; line-height: 1.4; }
+        #counter { color: #95a5a6; font-size: 0.9rem; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <button class="q-btn" id="qBtn" onclick="askQuestion()">❓</button>
+    <div id="keywordWindow" class="keyword-window">
+        <div style="font-size: 0.8rem; color: #7f8c8d; margin-bottom: 5px; letter-spacing: 1px;">KEYWORDS</div>
+        <div id="keywordList" class="keyword"></div>
+    </div>
+    
+    <button class="mic-btn" id="micBtn" onclick="startListening()">🎤</button>
+    
+    <div id="feedback" class="feedback"></div>
+    <div id="expectedBox" class="expected-box">
+        <strong style="color: #2c3e50;">Expected Answer:</strong><br>
+        <span id="expectedText"></span>
+    </div>
+    <div id="counter">Questions left: 20</div>
+</div>
+
+<script>
+    const qaData = [
+        { q: "What did you do last weekend?", k: "played lunch", a: "Last weekend, I played soccer and I had lunch with my grandparents." },
+        { q: "What were you doing at 8 pm yesterday?", k: "was", a: "Yesterday at 8 pm, I was watching TV." },
+        { q: "Tell me about a bad or funny day you had.", k: "funny was won thirty-first", a: "A funny day that I had was when Heredia soccer team won the thirty-first championship." },
+        { q: "What were you doing when something unexpected happened?", k: "was arrived", a: "I was playing soccer when my family arrived by surprise." },
+        { q: "What had you done before you came to school today?", k: "came shower", a: "Before I came to school today, I took a shower and had breakfast." },
+        { q: "What had happened before that situation?", k: "situation sleeping", a: "Before that situation, I was sleeping." },
+        { q: "How long had you been studying before your last exam?", k: "last been", a: "Before my last exam, I had been studying for three hours." },
+        { q: "What had you been doing before you felt very tired?", k: "tired been studying", a: "Before I felt very tired, I had been studying at school." },
+        { q: "What did you use to do when you were younger?", k: "younger sleep", a: "When I was younger, I used to sleep more." },
+        { q: "What would you do during your vacations as a child?", k: "child slept", a: "During my vacations as a child, I slept a lot." },
+        { q: "What should you have done differently in a bad situation?", k: "shouldn’t fallen studying", a: "I shouldn’t have fallen asleep when I was studying for the exams." },
+        { q: "What must students do to be successful in school?", k: "must harder", a: "To be successful in school, students must study harder." },
+        { q: "What do you have to do every day at home?", k: "study clean up", a: "Every day at home, I have to study and clean up my room." },
+        { q: "Tell me about a time you felt enraged.", k: "my team lost", a: "A time I felt enraged was when my soccer team lost an important game." },
+        { q: "Have you ever smashed or broken something? What happened?", k: "flower pot playing hit", a: "I broke a flower pot once. I was playing soccer and I hit the pot." },
+        { q: "Have you ever begged for something? What was it?", k: "have begged win", a: "I have begged for Heredia to win a championship." },
+        { q: "Tell me about something that struck in the past.", k: "strucked cartoons real", a: "Something that struck me in the past was that cartoons were not real people." },
+        { q: "Have you ever seen something get demolished? What happened?", k: "saw get building", a: "I saw Heredia’s old stadium get demolished. They are building a new one." },
+        { q: "What were you doing last week at this time?", k: "starting English", a: "Last week at this time, I was starting my English classes." },
+        { q: "Tell me something that happened a long time ago.", k: "built where live", a: "A long time ago, my parents built the house where we live now." }
+    ];
+
+    let availableQuestions = [...qaData];
+    let currentQA = null;
+
+    // 1. RECOGNITION SETUP
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = SpeechRecognition ? new SpeechRecognition() : null;
+    if (recognition) {
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+        recognition.continuous = false;
+    }
+
+    // 2. IMPROVED VOICE OUTPUT SETUP
+    const synth = window.speechSynthesis;
+    let preferredVoice = null;
+
+    function loadVoices() {
+        const voices = synth.getVoices();
+        // Priority: Google US English (Chrome), then any English voice containing "Natural" or "US"
+        preferredVoice = voices.find(v => v.name.includes('Google US English')) ||
+                         voices.find(v => v.name.includes('Natural') && v.lang.includes('en')) ||
+                         voices.find(v => v.lang.includes('en-US')) ||
+                         voices.find(v => v.lang.includes('en'));
+    }
+
+    // Handle browsers loading voices at different times
+    if (speechSynthesis.onvoiceschanged !== undefined) {
+        speechSynthesis.onvoiceschanged = loadVoices;
+    }
+    loadVoices();
+
+    function askQuestion() {
+        document.getElementById('feedback').innerText = "";
+        document.getElementById('expectedBox').style.display = "none";
+        
+        if (availableQuestions.length === 0) {
+            alert("Great job! You finished the deck. Restarting...");
+            availableQuestions = [...qaData];
+        }
+
+        const index = Math.floor(Math.random() * availableQuestions.length);
+        currentQA = availableQuestions.splice(index, 1)[0];
+
+        document.getElementById('keywordWindow').style.display = "block";
+        document.getElementById('keywordList').innerText = currentQA.k;
+        document.getElementById('micBtn').style.display = "block";
+        document.getElementById('counter').innerText = `Questions left: ${availableQuestions.length}`;
+
+        // Stop current speaking and apply high-quality voice
+        synth.cancel();
+        const utter = new SpeechSynthesisUtterance(currentQA.q);
+        if (preferredVoice) utter.voice = preferredVoice;
+        utter.rate = 0.9; // Slightly slower for clarity
+        synth.speak(utter);
+    }
+
+    function startListening() {
+        if (!recognition) {
+            alert("Recognition not supported. Use Chrome or Edge.");
+            return;
+        }
+        try {
+            recognition.start();
+            document.getElementById('micBtn').classList.add('active');
+            document.getElementById('feedback').innerText = "Listening...";
+        } catch (e) { console.log("Already active"); }
+    }
+
+    if (recognition) {
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript.toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"").trim();
+            const target = currentQA.a.toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"").trim();
+            
+            const feedback = document.getElementById('feedback');
+            document.getElementById('micBtn').classList.remove('active');
+
+            if (transcript === target || target.includes(transcript) && transcript.length > 5) {
+                feedback.innerHTML = '<span class="correct">Very good!</span>';
+            } else {
+                feedback.innerHTML = '<span class="incorrect">It is different.</span>';
+                document.getElementById('expectedBox').style.display = "block";
+                document.getElementById('expectedText').innerText = currentQA.a;
+                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            }
+        };
+
+        recognition.onerror = (event) => {
+            document.getElementById('micBtn').classList.remove('active');
+            if (event.error === 'network') alert("Network error. On GitHub, ensure you have an active internet connection for voice processing.");
+            else document.getElementById('feedback').innerText = "Try speaking again...";
+        };
+
+        recognition.onend = () => document.getElementById('micBtn').classList.remove('active');
+    }
+</script>
+
+</body>
+</html>
