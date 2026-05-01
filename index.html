@@ -12,12 +12,18 @@
         .mic-btn { background: #e74c3c; color: white; border: none; width: 70px; height: 70px; border-radius: 50%; font-size: 28px; cursor: pointer; display: none; margin: 20px auto; outline: none; transition: 0.3s; }
         .mic-btn.active { animation: pulse 1.5s infinite; background: #c0392b; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); } 70% { box-shadow: 0 0 0 20px rgba(231, 76, 60, 0); } 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); } }
+        
         .keyword-window { background: #fff9c4; border: 2px dashed #fbc02d; padding: 15px; border-radius: 10px; margin: 20px 0; display: none; }
         .keyword { font-weight: bold; color: #f57f17; font-size: 1.3rem; }
+        
+        /* New Transcript Style */
+        .transcript-box { background: #eef2f7; border-left: 5px solid #3498db; padding: 12px; margin-top: 15px; text-align: left; display: none; font-style: italic; color: #34495e; }
+        
         .feedback { font-weight: bold; margin-top: 15px; font-size: 1.2rem; min-height: 1.5em; }
         .correct { color: #27ae60; }
         .incorrect { color: #c0392b; }
-        .expected-box { background: #f8f9fa; border: 1px solid #ddd; padding: 15px; margin-top: 15px; border-radius: 8px; text-align: left; font-size: 1rem; display: none; line-height: 1.4; }
+        
+        .expected-box { background: #f8f9fa; border: 1px solid #ddd; padding: 15px; margin-top: 10px; border-radius: 8px; text-align: left; font-size: 1rem; display: none; line-height: 1.4; }
         #counter { color: #95a5a6; font-size: 0.9rem; margin-top: 15px; }
     </style>
 </head>
@@ -32,7 +38,13 @@
     
     <button class="mic-btn" id="micBtn" onclick="startListening()">🎤</button>
     
+    <!-- New Section: User Transcript -->
+    <div id="transcriptBox" class="transcript-box">
+        <strong>You said:</strong> <span id="transcriptText"></span>
+    </div>
+
     <div id="feedback" class="feedback"></div>
+    
     <div id="expectedBox" class="expected-box">
         <strong style="color: #2c3e50;">Expected Answer:</strong><br>
         <span id="expectedText"></span>
@@ -67,40 +79,34 @@
     let availableQuestions = [...qaData];
     let currentQA = null;
 
-    // 1. RECOGNITION SETUP
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = SpeechRecognition ? new SpeechRecognition() : null;
+    const synth = window.speechSynthesis;
+    let preferredVoice = null;
+
+    function loadVoices() {
+        const voices = synth.getVoices();
+        preferredVoice = voices.find(v => v.name.includes('Google US English')) ||
+                         voices.find(v => v.name.includes('Natural') && v.lang.includes('en')) ||
+                         voices.find(v => v.lang.includes('en-US')) ||
+                         voices.find(v => v.lang.includes('en'));
+    }
+    if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
+
     if (recognition) {
         recognition.lang = 'en-US';
         recognition.interimResults = false;
         recognition.continuous = false;
     }
 
-    // 2. IMPROVED VOICE OUTPUT SETUP
-    const synth = window.speechSynthesis;
-    let preferredVoice = null;
-
-    function loadVoices() {
-        const voices = synth.getVoices();
-        // Priority: Google US English (Chrome), then any English voice containing "Natural" or "US"
-        preferredVoice = voices.find(v => v.name.includes('Google US English')) ||
-                         voices.find(v => v.name.includes('Natural') && v.lang.includes('en')) ||
-                         voices.find(v => v.lang.includes('en-US')) ||
-                         voices.find(v => v.lang.includes('en'));
-    }
-
-    // Handle browsers loading voices at different times
-    if (speechSynthesis.onvoiceschanged !== undefined) {
-        speechSynthesis.onvoiceschanged = loadVoices;
-    }
-    loadVoices();
-
     function askQuestion() {
         document.getElementById('feedback').innerText = "";
         document.getElementById('expectedBox').style.display = "none";
+        document.getElementById('transcriptBox').style.display = "none"; // Hide transcript
         
         if (availableQuestions.length === 0) {
-            alert("Great job! You finished the deck. Restarting...");
+            alert("All questions finished! Restarting...");
             availableQuestions = [...qaData];
         }
 
@@ -112,35 +118,37 @@
         document.getElementById('micBtn').style.display = "block";
         document.getElementById('counter').innerText = `Questions left: ${availableQuestions.length}`;
 
-        // Stop current speaking and apply high-quality voice
         synth.cancel();
         const utter = new SpeechSynthesisUtterance(currentQA.q);
         if (preferredVoice) utter.voice = preferredVoice;
-        utter.rate = 0.9; // Slightly slower for clarity
+        utter.rate = 0.9;
         synth.speak(utter);
     }
 
     function startListening() {
-        if (!recognition) {
-            alert("Recognition not supported. Use Chrome or Edge.");
-            return;
-        }
+        if (!recognition) return alert("Browser not supported.");
         try {
             recognition.start();
             document.getElementById('micBtn').classList.add('active');
             document.getElementById('feedback').innerText = "Listening...";
-        } catch (e) { console.log("Already active"); }
+        } catch (e) { console.log("Mic busy"); }
     }
 
     if (recognition) {
         recognition.onresult = (event) => {
-            const transcript = event.results[0][0].transcript.toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"").trim();
+            document.getElementById('micBtn').classList.remove('active');
+            const transcript = event.results[0][0].transcript;
+            
+            // Show the transcript box
+            document.getElementById('transcriptBox').style.display = "block";
+            document.getElementById('transcriptText').innerText = transcript;
+
+            const cleanTranscript = transcript.toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"").trim();
             const target = currentQA.a.toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"").trim();
             
             const feedback = document.getElementById('feedback');
-            document.getElementById('micBtn').classList.remove('active');
 
-            if (transcript === target || target.includes(transcript) && transcript.length > 5) {
+            if (cleanTranscript === target || target.includes(cleanTranscript) && cleanTranscript.length > 5) {
                 feedback.innerHTML = '<span class="correct">Very good!</span>';
             } else {
                 feedback.innerHTML = '<span class="incorrect">It is different.</span>';
@@ -150,10 +158,9 @@
             }
         };
 
-        recognition.onerror = (event) => {
+        recognition.onerror = () => {
             document.getElementById('micBtn').classList.remove('active');
-            if (event.error === 'network') alert("Network error. On GitHub, ensure you have an active internet connection for voice processing.");
-            else document.getElementById('feedback').innerText = "Try speaking again...";
+            document.getElementById('feedback').innerText = "Try speaking again...";
         };
 
         recognition.onend = () => document.getElementById('micBtn').classList.remove('active');
