@@ -11,13 +11,17 @@
         .mic-btn { background: #e74c3c; color: white; border: none; width: 70px; height: 70px; border-radius: 50%; font-size: 28px; cursor: pointer; display: none; margin: 20px auto; outline: none; transition: 0.3s; }
         .mic-btn.active { animation: pulse 1.5s infinite; background: #c0392b; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); } 70% { box-shadow: 0 0 0 20px rgba(231, 76, 60, 0); } 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); } }
+        
         .keyword-window { background: #fff9c4; border: 2px dashed #fbc02d; padding: 15px; border-radius: 10px; margin: 20px 0; }
         .keyword { font-weight: bold; color: #f57f17; font-size: 1.3rem; }
+        
         #transcriptBox { background: #f0f7ff; border: 1px solid #d0e3ff; padding: 15px; margin: 20px 0; border-radius: 10px; text-align: left; display: none; }
         .label { font-size: 0.7rem; color: #5dade2; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
+        
         .feedback { font-weight: bold; margin-top: 15px; font-size: 1.4rem; min-height: 1.5em; }
         .correct { color: #27ae60; }
         .incorrect { color: #c0392b; }
+        
         .expected-box { background: #fdfefe; border: 1px solid #ebedef; padding: 15px; margin-top: 10px; border-radius: 8px; text-align: left; font-size: 1rem; display: none; border-left: 4px solid #bdc3c7; }
     </style>
 </head>
@@ -25,16 +29,21 @@
 
 <div class="card">
     <button class="q-btn" onclick="askQuestion()">❓</button>
+    
     <div id="keywordWindow" class="keyword-window" style="display:none;">
         <div style="font-size: 0.8rem; color: #7f8c8d; margin-bottom: 5px;">KEYWORDS</div>
         <div id="keywordList" class="keyword"></div>
     </div>
+    
     <button class="mic-btn" id="micBtn" onclick="startListening()">🎤</button>
+    
     <div id="transcriptBox">
         <div class="label">You said:</div>
         <div id="transcriptText" style="color: #2e4053; font-style: italic;"></div>
     </div>
+
     <div id="feedback" class="feedback"></div>
+    
     <div id="expectedBox" class="expected-box">
         <div class="label" style="color: #7f8c8d;">Expected Answer:</div>
         <span id="expectedText"></span>
@@ -101,22 +110,12 @@
         recognition.onresult = (event) => {
             document.getElementById('micBtn').classList.remove('active');
             const transcript = event.results[0][0].transcript;
+            
             document.getElementById('transcriptBox').style.display = "block";
             document.getElementById('transcriptText').innerText = '"' + transcript + '"';
 
-            // ENHANCED CLEANING FUNCTION: Fixes "3" vs "three" and "everyday" vs "every day"
             function clean(text) {
-                return text.toLowerCase()
-                    .replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"")
-                    .replace(/\beveryday\b/g, "every day")
-                    .replace(/\b1\b/g, "one")
-                    .replace(/\b2\b/g, "two")
-                    .replace(/\b3\b/g, "three")
-                    .replace(/\b4\b/g, "four")
-                    .replace(/\b5\b/g, "five")
-                    .replace(/\b8\b/g, "eight")
-                    .replace(/\b31\b/g, "thirty-first")
-                    .trim();
+                return text.toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"").replace(/\beveryday\b/g, "every day").trim();
             }
 
             const cleanUser = clean(transcript);
@@ -125,10 +124,8 @@
             const targetWords = cleanTarget.split(/\s+/);
             const keyWords = currentQA.k.split(/\s+/);
 
-            // 1. Check if all required keywords are present
+            // Logic Check
             const hasAllKeys = keyWords.every(word => userWords.includes(clean(word)));
-            
-            // 2. Check general sentence similarity
             let matchCount = 0;
             targetWords.forEach(word => { if (userWords.includes(word)) matchCount++; });
             const score = matchCount / targetWords.length;
@@ -142,7 +139,7 @@
             } else {
                 feedback.innerHTML = '<span class="incorrect">It is different.</span>';
                 document.getElementById('expectedText').innerText = currentQA.a;
-                expectedBox.style.display = "block";
+                expectedBox.style.display = "block"; // ALWAYS SHOWS ON FAILURE
             }
         };
     }
