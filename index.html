@@ -70,22 +70,6 @@
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = SpeechRecognition ? new SpeechRecognition() : null;
-    if(recognition) recognition.lang = 'en-US';
-
-    const synth = window.speechSynthesis;
-
-    // FORCED ENGLISH VOICE SELECTOR
-    function getEnglishVoice() {
-        const voices = synth.getVoices();
-        // Look for Google's English voice first, then any US/UK English
-        const bestMatch = voices.find(v => v.name.includes('Google US English')) || 
-                          voices.find(v => v.lang === 'en-US') || 
-                          voices.find(v => v.lang.startsWith('en'));
-        return bestMatch;
-    }
-
-    // Ensure voices are loaded before starting
-    window.speechSynthesis.onvoiceschanged = getEnglishVoice;
 
     function askQuestion() {
         document.getElementById('feedback').innerText = "";
@@ -100,19 +84,10 @@
         document.getElementById('keywordList').innerText = currentQA.k;
         document.getElementById('micBtn').style.display = "block";
 
-        synth.cancel();
+        window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(currentQA.q);
-        
-        const engVoice = getEnglishVoice();
-        if (engVoice) {
-            utter.voice = engVoice;
-            utter.lang = engVoice.lang; // Force the language to match the voice
-        } else {
-            utter.lang = 'en-US'; // Fallback
-        }
-        
-        utter.rate = 0.85; 
-        synth.speak(utter);
+        utter.rate = 0.9;
+        window.speechSynthesis.speak(utter);
     }
 
     function startListening() {
@@ -129,6 +104,7 @@
             document.getElementById('transcriptBox').style.display = "block";
             document.getElementById('transcriptText').innerText = '"' + transcript + '"';
 
+            // ENHANCED CLEANING FUNCTION: Fixes "3" vs "three" and "everyday" vs "every day"
             function clean(text) {
                 return text.toLowerCase()
                     .replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"")
@@ -149,7 +125,10 @@
             const targetWords = cleanTarget.split(/\s+/);
             const keyWords = currentQA.k.split(/\s+/);
 
+            // 1. Check if all required keywords are present
             const hasAllKeys = keyWords.every(word => userWords.includes(clean(word)));
+            
+            // 2. Check general sentence similarity
             let matchCount = 0;
             targetWords.forEach(word => { if (userWords.includes(word)) matchCount++; });
             const score = matchCount / targetWords.length;
