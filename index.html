@@ -23,7 +23,6 @@
         .incorrect { color: #c0392b; }
         
         .expected-box { background: #fdfefe; border: 1px solid #ebedef; padding: 15px; margin-top: 10px; border-radius: 8px; text-align: left; font-size: 1rem; display: none; border-left: 4px solid #bdc3c7; }
-        #counter { color: #95a5a6; font-size: 0.9rem; margin-top: 15px; }
     </style>
 </head>
 <body>
@@ -49,19 +48,17 @@
         <div class="label" style="color: #7f8c8d;">Expected Answer:</div>
         <span id="expectedText"></span>
     </div>
-    
-    <div id="counter">Questions left: 20</div>
 </div>
 
 <script>
     const qaData = [
         { q: "What did you do last weekend?", k: "played lunch", a: "Last weekend, I played soccer and I had lunch with my grandparents." },
-        { q: "What were you doing at 8 pm yesterday?", k: "was", a: "Yesterday at 8 pm, I was watching TV." },
+        { q: "What were you doing at 8 pm yesterday?", k: "was watching", a: "Yesterday at 8 pm, I was watching TV." },
         { q: "Tell me about a bad or funny day you had.", k: "funny was won thirty-first", a: "A funny day that I had was when Heredia soccer team won the thirty-first championship." },
-        { q: "What were you doing when something unexpected happened?", k: "was arrived", a: "I was playing soccer when my family arrived by surprise." },
+        { q: "What were you doing when something unexpected happened?", k: "was playing arrived", a: "I was playing soccer when my family arrived by surprise." },
         { q: "What had you done before you came to school today?", k: "came shower", a: "Before I came to school today, I took a shower and had breakfast." },
         { q: "What had happened before that situation?", k: "situation sleeping", a: "Before that situation, I was sleeping." },
-        { q: "How long had you been studying before your last exam?", k: "last been", a: "Before my last exam, I had been studying for three hours." },
+        { q: "How long had you been studying before your last exam?", k: "last been studying", a: "Before my last exam, I had been studying for three hours." },
         { q: "What had you been doing before you felt very tired?", k: "tired been studying", a: "Before I felt very tired, I had been studying at school." },
         { q: "What did you use to do when you were younger?", k: "younger sleep", a: "When I was younger, I used to sleep more." },
         { q: "What would you do during your vacations as a child?", k: "child slept", a: "During my vacations as a child, I slept a lot." },
@@ -82,15 +79,6 @@
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = SpeechRecognition ? new SpeechRecognition() : null;
-    const synth = window.speechSynthesis;
-    let preferredVoice = null;
-
-    function loadVoices() {
-        const voices = synth.getVoices();
-        preferredVoice = voices.find(v => v.name.includes('Google US English')) || voices.find(v => v.lang.includes('en-US')) || voices[0];
-    }
-    if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = loadVoices;
-    loadVoices();
 
     function askQuestion() {
         document.getElementById('feedback').innerText = "";
@@ -98,26 +86,21 @@
         document.getElementById('transcriptBox').style.display = "none";
         document.getElementById('keywordWindow').style.display = "block";
 
-        if (availableQuestions.length === 0) {
-            availableQuestions = [...qaData];
-        }
-
+        if (availableQuestions.length === 0) availableQuestions = [...qaData];
         const index = Math.floor(Math.random() * availableQuestions.length);
         currentQA = availableQuestions.splice(index, 1)[0];
 
         document.getElementById('keywordList').innerText = currentQA.k;
         document.getElementById('micBtn').style.display = "block";
-        document.getElementById('counter').innerText = `Questions left: ${availableQuestions.length}`;
 
-        synth.cancel();
+        window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(currentQA.q);
-        if (preferredVoice) utter.voice = preferredVoice;
         utter.rate = 0.9;
-        synth.speak(utter);
+        window.speechSynthesis.speak(utter);
     }
 
     function startListening() {
-        if (!recognition) return alert("Browser not supported.");
+        if (!recognition) return;
         recognition.start();
         document.getElementById('micBtn').classList.add('active');
         document.getElementById('feedback').innerText = "Listening...";
@@ -131,43 +114,33 @@
             document.getElementById('transcriptBox').style.display = "block";
             document.getElementById('transcriptText').innerText = '"' + transcript + '"';
 
-            // SMART CLEANING FUNCTION
             function clean(text) {
-                return text.toLowerCase()
-                    .replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"") // Remove punctuation
-                    .replace(/\beveryday\b/g, "every day")    // Fix image_200994.png issue
-                    .trim();
+                return text.toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"").replace(/\beveryday\b/g, "every day").trim();
             }
 
             const cleanUser = clean(transcript);
             const cleanTarget = clean(currentQA.a);
-            
             const userWords = cleanUser.split(/\s+/);
             const targetWords = cleanTarget.split(/\s+/);
-            
-            // Compare word counts
+            const keyWords = currentQA.k.split(/\s+/);
+
+            // Logic Check
+            const hasAllKeys = keyWords.every(word => userWords.includes(clean(word)));
             let matchCount = 0;
-            targetWords.forEach(word => {
-                if (userWords.includes(word)) matchCount++;
-            });
-
+            targetWords.forEach(word => { if (userWords.includes(word)) matchCount++; });
             const score = matchCount / targetWords.length;
-            const feedback = document.getElementById('feedback');
 
-            // 75% match threshold: Strict on content, lenient on tiny AI errors
-            if (score >= 0.75) {
+            const feedback = document.getElementById('feedback');
+            const expectedBox = document.getElementById('expectedBox');
+
+            if (hasAllKeys && score >= 0.75) {
                 feedback.innerHTML = '<span class="correct">Very good!</span>';
-                document.getElementById('expectedBox').style.display = "none";
+                expectedBox.style.display = "none";
             } else {
                 feedback.innerHTML = '<span class="incorrect">It is different.</span>';
-                document.getElementById('expectedBox').style.display = "block";
                 document.getElementById('expectedText').innerText = currentQA.a;
+                expectedBox.style.display = "block"; // ALWAYS SHOWS ON FAILURE
             }
-        };
-
-        recognition.onerror = () => {
-            document.getElementById('micBtn').classList.remove('active');
-            document.getElementById('feedback').innerText = "Error - try again.";
         };
     }
 </script>
