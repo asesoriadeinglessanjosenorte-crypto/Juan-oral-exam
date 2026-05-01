@@ -68,26 +68,24 @@
     let availableQuestions = [...qaData];
     let currentQA = null;
 
-    // SPEECH CONFIGURATION
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = SpeechRecognition ? new SpeechRecognition() : null;
     if(recognition) recognition.lang = 'en-US';
 
     const synth = window.speechSynthesis;
-    let voices = [];
 
-    // Function to find the best English voice
-    function getBestVoice() {
-        voices = synth.getVoices();
-        // Priority: Google US English -> Any en-US -> Any en
-        return voices.find(v => v.name === 'Google US English') || 
-               voices.find(v => v.lang === 'en-US') || 
-               voices.find(v => v.lang.startsWith('en')) || 
-               voices[0];
+    // FORCED ENGLISH VOICE SELECTOR
+    function getEnglishVoice() {
+        const voices = synth.getVoices();
+        // Look for Google's English voice first, then any US/UK English
+        const bestMatch = voices.find(v => v.name.includes('Google US English')) || 
+                          voices.find(v => v.lang === 'en-US') || 
+                          voices.find(v => v.lang.startsWith('en'));
+        return bestMatch;
     }
 
-    // Chrome needs this to load voices correctly
-    window.speechSynthesis.onvoiceschanged = () => { voices = synth.getVoices(); };
+    // Ensure voices are loaded before starting
+    window.speechSynthesis.onvoiceschanged = getEnglishVoice;
 
     function askQuestion() {
         document.getElementById('feedback').innerText = "";
@@ -105,16 +103,20 @@
         synth.cancel();
         const utter = new SpeechSynthesisUtterance(currentQA.q);
         
-        // SET LANGUAGE EXPLICITLY
-        utter.voice = getBestVoice();
-        utter.lang = 'en-US';
-        utter.rate = 0.9; 
+        const engVoice = getEnglishVoice();
+        if (engVoice) {
+            utter.voice = engVoice;
+            utter.lang = engVoice.lang; // Force the language to match the voice
+        } else {
+            utter.lang = 'en-US'; // Fallback
+        }
         
+        utter.rate = 0.85; 
         synth.speak(utter);
     }
 
     function startListening() {
-        if (!recognition) return alert("Speech recognition not supported in this browser.");
+        if (!recognition) return;
         recognition.start();
         document.getElementById('micBtn').classList.add('active');
         document.getElementById('feedback').innerText = "Listening...";
