@@ -70,6 +70,19 @@
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = SpeechRecognition ? new SpeechRecognition() : null;
+    
+    // Voice Selection Logic
+    let englishVoice = null;
+    function loadVoices() {
+        const voices = window.speechSynthesis.getVoices();
+        // Priority: US English -> Any English
+        englishVoice = voices.find(v => v.lang === 'en-US' || v.lang === 'en_US') || 
+                       voices.find(v => v.lang.startsWith('en'));
+    }
+    
+    // Some browsers need this event to load voices
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
 
     function askQuestion() {
         document.getElementById('feedback').innerText = "";
@@ -86,12 +99,18 @@
 
         window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(currentQA.q);
+        
+        // APPLY THE VOICE AND LANGUAGE FIX
+        if (englishVoice) utter.voice = englishVoice;
+        utter.lang = 'en-US'; 
         utter.rate = 0.9;
+        
         window.speechSynthesis.speak(utter);
     }
 
     function startListening() {
         if (!recognition) return;
+        recognition.lang = 'en-US'; // Ensure listener is also set to English
         recognition.start();
         document.getElementById('micBtn').classList.add('active');
         document.getElementById('feedback').innerText = "Listening...";
@@ -104,7 +123,6 @@
             document.getElementById('transcriptBox').style.display = "block";
             document.getElementById('transcriptText').innerText = '"' + transcript + '"';
 
-            // ENHANCED CLEANING FUNCTION: Fixes "3" vs "three" and "everyday" vs "every day"
             function clean(text) {
                 return text.toLowerCase()
                     .replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"")
@@ -125,10 +143,7 @@
             const targetWords = cleanTarget.split(/\s+/);
             const keyWords = currentQA.k.split(/\s+/);
 
-            // 1. Check if all required keywords are present
             const hasAllKeys = keyWords.every(word => userWords.includes(clean(word)));
-            
-            // 2. Check general sentence similarity
             let matchCount = 0;
             targetWords.forEach(word => { if (userWords.includes(word)) matchCount++; });
             const score = matchCount / targetWords.length;
